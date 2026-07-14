@@ -212,12 +212,12 @@
   }
   .sub-list textarea{
     flex:1;border:none;background:transparent;font-family:'Inter',sans-serif;font-size:12.5px;color:#454b57;
-    resize:none;height:18px;line-height:1.3;padding:0;min-width:0;
+    resize:none;height:auto;min-height:20px;line-height:1.6;padding:1px 0;min-width:0;
   }
   .sub-qty-input, .sub-rate-input{
     border:none;border-bottom:1px dashed var(--line);background:transparent;
     font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--text);
-    padding:1px 0;flex-shrink:0;
+    padding:2px 0;line-height:1.5;flex-shrink:0;
   }
   .sub-qty-input{width:50px;text-align:center;}
   .sub-rate-input{width:62px;text-align:right;}
@@ -307,6 +307,7 @@
   .exporting .sub-list li.zero-rate .sub-qty-input,
   .exporting .sub-list li.zero-rate .sub-rate-input,
   .exporting .sub-list li.zero-rate .sub-amt{display:none !important;}
+  .exporting .comp-box.is-empty{display:none !important;}
   .exporting .sub-head.all-zero .sh-qty,
   .exporting .sub-head.all-zero .sh-rate,
   .exporting .sub-head.all-zero .sh-amt{display:none !important;}
@@ -595,7 +596,7 @@ function fmt(n){
 }
 function autoGrow(ta){
   ta.style.height = 'auto';
-  ta.style.height = (ta.scrollHeight) + 'px';
+  ta.style.height = (ta.scrollHeight + 2) + 'px';
 }
 function formatDMY(iso){
   if(!iso) return '';
@@ -752,8 +753,17 @@ function addComp(text){
   const list = document.getElementById('compList');
   const row = document.createElement('div');
   row.className = 'comp-item';
-  row.innerHTML = `<button class="btn-remove no-export" onclick="this.parentElement.remove()">✕</button><textarea rows="1" oninput="autoGrow(this)">${text||''}</textarea>`;
+  row.innerHTML = `<button class="btn-remove no-export" onclick="this.parentElement.remove(); updateCompBoxState();">✕</button><textarea rows="1" oninput="autoGrow(this)">${text||''}</textarea>`;
   list.appendChild(row);
+  updateCompBoxState();
+}
+
+function updateCompBoxState(){
+  const list = document.getElementById('compList');
+  const box = list ? list.closest('.comp-box') : null;
+  if(!box) return;
+  const hasItems = list.querySelectorAll('.comp-item').length > 0;
+  box.classList.toggle('is-empty', !hasItems);
 }
 
 // ---- sample data used only to seed the very first visit ----
@@ -969,6 +979,7 @@ function loadInvoiceIntoEditor(data){
   (data.advances||[]).forEach(a => addAdvance(a.date, a.amount));
   recalc();
   paintAllDates();
+  updateCompBoxState();
 }
 
 // ---------- DASHBOARD <-> EDITOR NAVIGATION ----------
