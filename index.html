@@ -1153,6 +1153,7 @@ async function renderDashboard(){
           </div>
           <div class="inv-card-actions no-export">
             <button class="btn-text" onclick="openEditInvoice('${inv.id}')">Edit</button>
+            <button class="btn-text" onclick="shareInvoicePDF('${inv.id}')">Share</button>
             <button class="btn-text" onclick="duplicateInvoice('${inv.id}')">Duplicate</button>
             <button class="btn-text" style="color:var(--danger);" onclick="deleteInvoice('${inv.id}')">Delete</button>
           </div>
@@ -1262,8 +1263,40 @@ async function downloadJPG(){
   });
 }
 
-async function downloadPDF(){
-  await withExportMode(async (sheet)=>{
+// ---------- FILE NAMING ----------
+function sanitizeFileName(str){
+  return (str||'')
+    .toString()
+    .replace(/[\\/:*?"<>|]/g, '-')   // characters not allowed in filenames
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildInvoiceFileName(data){
+  const venue = sanitizeFileName(data && data.venueName);
+  const eventDate = sanitizeFileName(data && data.eventDate);
+  let name = [venue, eventDate].filter(Boolean).join(' - ');
+  if(!name) name = 'thillai-invoice';
+  return name + '.pdf';
+}
+
+// ---------- SHARE / DOWNLOAD HELPERS ----------
+async function shareOrDownloadPDF(pdf, filename){
+  try{
+    const blob = pdf.output('blob');
+    const file = new File([blob], filename, {type:'application/pdf'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title: filename});
+      return;
+    }
+  }catch(e){
+    if(e && e.name === 'AbortError') return; // user cancelled the share sheet
+    // fall through to a plain download on any other error
+  }
+  pdf.save(filename);
+}
+
+async function buildInvoicePDF(sheet){
     const canvas = await html2canvas(sheet, {scale:2, backgroundColor:'#ffffff', useCORS:true});
     const { jsPDF } = window.jspdf;
     const pdfWidth = 210;
@@ -1357,8 +1390,54 @@ async function downloadPDF(){
       currentY += contentHeightPx;
     }
 
-    pdf.save('thillai-invoice.pdf');
+    return pdf;
+}
+
+async function downloadPDF(){
+  await withExportMode(async (sheet)=>{
+    const pdf = await buildInvoicePDF(sheet);
+    const filename = buildInvoiceFileName({
+      venueName: document.getElementById('venueName').value,
+      eventDate: document.getElementById('eventDate').value
+    });
+    pdf.save(filename);
   });
+}
+
+// Share (or download, as a fallback) a saved invoice's PDF directly from the
+// dashboard card, without leaving the dashboard screen. Renders the invoice
+// off-screen using the same editor markup used for the open invoice.
+async function shareInvoicePDF(id){
+  const list = await loadInvoicesList();
+  const inv = list.find(x=>x.id===id);
+  if(!inv) return;
+
+  const editorScreen = document.getElementById('editorScreen');
+  const prev = {
+    display: editorScreen.style.display,
+    position: editorScreen.style.position,
+    top: editorScreen.style.top,
+    left: editorScreen.style.left
+  };
+
+  editorScreen.style.position = 'fixed';
+  editorScreen.style.top = '0';
+  editorScreen.style.left = '-99999px';
+  editorScreen.style.display = '';
+
+  try{
+    loadInvoiceIntoEditor(inv.data);
+    await withExportMode(async (sheet)=>{
+      const pdf = await buildInvoicePDF(sheet);
+      const filename = buildInvoiceFileName(inv.data);
+      await shareOrDownloadPDF(pdf, filename);
+    });
+  } finally {
+    editorScreen.style.display = prev.display;
+    editorScreen.style.position = prev.position;
+    editorScreen.style.top = prev.top;
+    editorScreen.style.left = prev.left;
+  }
 }
 </script>
 </body>
